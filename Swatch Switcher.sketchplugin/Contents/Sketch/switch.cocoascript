@@ -1,0 +1,532 @@
+var sketch = require('sketch');
+var UI = sketch.UI;
+
+try {
+
+var doc = sketch.getSelectedDocument();
+var Library = sketch.Library;
+var libs = Library.getLibraries();
+
+var selection = doc.selectedLayers.layers;
+if (!selection || selection.length === 0) {
+  UI.message('Please select at least one layer');
+} else {
+
+var foreign = doc.sketchObject.documentData().foreignSwatches();
+
+var swatchIDList = [];
+var swatchLibIDList = [];
+var swatchNameList = [];
+for (var i = 0; i < foreign.count(); i++) {
+  var fs = foreign[i];
+  var local = fs.localObject();
+  if (local && local.objectID && fs.libraryID) {
+    swatchIDList.push(String(local.objectID()));
+    swatchLibIDList.push(String(fs.libraryID()));
+    swatchNameList.push(local.name ? String(local.name()) : '');
+  }
+}
+
+function getLibIDForSwatch(swatchID) {
+  for (var i = 0; i < swatchIDList.length; i++) {
+    if (swatchIDList[i] === swatchID) return swatchLibIDList[i];
+  }
+  return null;
+}
+
+function getNameForSwatch(swatchID) {
+  for (var i = 0; i < swatchIDList.length; i++) {
+    if (swatchIDList[i] === swatchID) return swatchNameList[i];
+  }
+  return null;
+}
+
+function arrayContains(arr, val) {
+  for (var i = 0; i < arr.length; i++) {
+    if (arr[i] === val) return true;
+  }
+  return false;
+}
+
+function arrayAddUnique(arr, val) {
+  if (!arrayContains(arr, val)) arr.push(val);
+}
+
+// Normalize a swatch name by trimming spaces around slashes
+function normalizeName(name) {
+  // Split by /, trim each part, rejoin
+  var parts = name.split('/');
+  var trimmed = [];
+  for (var i = 0; i < parts.length; i++) {
+    var p = parts[i];
+    // Trim leading and trailing spaces
+    while (p.length > 0 && p.charAt(0) === ' ') p = p.substring(1);
+    while (p.length > 0 && p.charAt(p.length - 1) === ' ') p = p.substring(0, p.length - 1);
+    if (p.length > 0) trimmed.push(p);
+  }
+  return trimmed.join('/');
+}
+
+function isThemeLike(str) {
+  var lower = str.toLowerCase();
+  return lower.indexOf('light') >= 0 || lower.indexOf('dark') >= 0;
+}
+
+var foundLibID = null;
+var selectedSwatchNames = [];
+var selectedOverrideIds = []; // Track specifically selected overrides
+var hasSelectedOverrides = false; // Flag if user selected specific overrides
+
+// First pass: detect if any specific overrides are selected
+function detectSelectedOverrides(layer) {
+  if (layer.type === 'SymbolInstance' && layer.overrides) {
+    for (var o = 0; o < layer.overrides.length; o++) {
+      var ov = layer.overrides[o];
+      if (ov.selected && ov.swatchValue && ov.swatchValue.name) {
+        hasSelectedOverrides = true;
+        arrayAddUnique(selectedOverrideIds, ov.id);
+      }
+    }
+  }
+  if (layer.layers) {
+    for (var c = 0; c < layer.layers.length; c++) {
+      detectSelectedOverrides(layer.layers[c]);
+    }
+  }
+}
+
+for (var i = 0; i < selection.length; i++) {
+  detectSelectedOverrides(selection[i]);
+}
+
+function scanSelection(layer) {
+  var native = layer.sketchObject;
+
+  // Only scan fills/borders if we're not in "selected overrides only" mode
+  if (!hasSelectedOverrides) {
+    if (layer.style && layer.style.fills && native.style) {
+      var nativeFills = native.style().fills();
+      if (nativeFills) {
+        for (var f = 0; f < layer.style.fills.length; f++) {
+          if (nativeFills[f] && nativeFills[f].color) {
+            var nativeColor = nativeFills[f].color();
+            if (nativeColor && nativeColor.swatchID) {
+              var swatchID = String(nativeColor.swatchID());
+              var libID = getLibIDForSwatch(swatchID);
+              var swatchName = getNameForSwatch(swatchID);
+              if (libID && swatchName) {
+                if (!foundLibID) foundLibID = libID;
+                if (libID === foundLibID) arrayAddUnique(selectedSwatchNames, swatchName);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (layer.style && layer.style.borders && native.style) {
+      var nativeBorders = native.style().borders();
+      if (nativeBorders) {
+        for (var b = 0; b < layer.style.borders.length; b++) {
+          if (nativeBorders[b] && nativeBorders[b].color) {
+            var nativeColor = nativeBorders[b].color();
+            if (nativeColor && nativeColor.swatchID) {
+              var swatchID = String(nativeColor.swatchID());
+              var libID = getLibIDForSwatch(swatchID);
+              var swatchName = getNameForSwatch(swatchID);
+              if (libID && swatchName) {
+                if (!foundLibID) foundLibID = libID;
+                if (libID === foundLibID) arrayAddUnique(selectedSwatchNames, swatchName);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (layer.type === 'SymbolInstance' && layer.overrides) {
+    for (var o = 0; o < layer.overrides.length; o++) {
+      var ov = layer.overrides[o];
+      if (ov.swatchValue && ov.swatchValue.name) {
+        // If we have selected overrides, only process those
+        if (hasSelectedOverrides && !arrayContains(selectedOverrideIds, ov.id)) {
+          continue;
+        }
+        var swatchID = ov.swatchValue.id;
+        var swatchName = ov.swatchValue.name;
+        arrayAddUnique(selectedSwatchNames, swatchName);
+        if (swatchID) {
+          var libID = getLibIDForSwatch(swatchID);
+          if (libID && !foundLibID) {
+            foundLibID = libID;
+          }
+        }
+      }
+    }
+  }
+
+  if (layer.layers) {
+    for (var c = 0; c < layer.layers.length; c++) {
+      scanSelection(layer.layers[c]);
+    }
+  }
+}
+
+for (var i = 0; i < selection.length; i++) {
+  scanSelection(selection[i]);
+}
+
+var matchedLib = null;
+
+// First try: match by library ID
+if (foundLibID) {
+  for (var i = 0; i < libs.length; i++) {
+    if (String(libs[i].id) === foundLibID) {
+      matchedLib = libs[i];
+      break;
+    }
+  }
+}
+
+// Fallback: find library that contains the swatch names we found
+if (!matchedLib && selectedSwatchNames.length > 0) {
+  var firstSwatchName = normalizeName(selectedSwatchNames[0]);
+  for (var i = 0; i < libs.length; i++) {
+    if (!libs[i].enabled) continue;
+    try {
+      var testRefs = libs[i].getImportableSwatchReferencesForDocument(doc);
+      for (var r = 0; r < testRefs.length; r++) {
+        var normalizedRefName = normalizeName(testRefs[r].name);
+        if (normalizedRefName === firstSwatchName) {
+          matchedLib = libs[i];
+          break;
+        }
+      }
+      if (matchedLib) break;
+    } catch (e) {}
+  }
+}
+
+if (selectedSwatchNames.length === 0) {
+  UI.message('No color variables found in selection');
+} else if (!matchedLib) {
+  UI.message('Found ' + selectedSwatchNames.length + ' swatches but no library matched. Check library is enabled.');
+} else {
+  var refs = matchedLib.getImportableSwatchReferencesForDocument(doc);
+
+  // Build lookup maps: normalized name -> original name, and normalized name -> ref
+  var refNames = [];           // Original names
+  var refObjs = [];            // Ref objects
+  var normalizedToOriginal = []; // Parallel: normalized names
+  var normalizedSet = [];      // Unique normalized names for lookup
+
+  for (var i = 0; i < refs.length; i++) {
+    var origName = refs[i].name;
+    var normName = normalizeName(origName);
+    refNames.push(origName);
+    refObjs.push(refs[i]);
+    normalizedToOriginal.push(normName);
+    arrayAddUnique(normalizedSet, normName);
+  }
+
+  // Function to find ref by normalized name
+  function findRefByNormalizedName(normName) {
+    for (var i = 0; i < normalizedToOriginal.length; i++) {
+      if (normalizedToOriginal[i] === normName) {
+        return refObjs[i];
+      }
+    }
+    return null;
+  }
+
+  // Discover theme keywords from normalized names
+  var themeKeywords = [];
+  for (var i = 0; i < normalizedSet.length; i++) {
+    var parts = normalizedSet[i].split('/');
+    for (var p = 0; p < parts.length; p++) {
+      if (isThemeLike(parts[p])) {
+        arrayAddUnique(themeKeywords, parts[p]);
+      }
+    }
+  }
+
+  // Process selected swatches
+  var swatchInfoList = [];
+  var currentThemesList = [];
+  var unmatchedSwatches = [];
+
+  for (var i = 0; i < selectedSwatchNames.length; i++) {
+    var origName = selectedSwatchNames[i];
+    var name = normalizeName(origName);
+    var parts = name.split('/');
+
+    if (parts.length < 2) continue;
+
+    var themePos = -1;
+    var currentTheme = null;
+
+    for (var p = 0; p < parts.length; p++) {
+      if (arrayContains(themeKeywords, parts[p])) {
+        themePos = p;
+        currentTheme = parts[p];
+        break;
+      }
+    }
+
+    if (themePos < 0) {
+      unmatchedSwatches.push(origName);
+      continue;
+    }
+
+    arrayAddUnique(currentThemesList, currentTheme);
+
+    var templateParts = parts.slice();
+    templateParts[themePos] = '{{THEME}}';
+    var template = templateParts.join('/');
+
+    swatchInfoList.push({
+      originalName: origName,
+      normalizedName: name,
+      themePos: themePos,
+      currentTheme: currentTheme,
+      template: template
+    });
+  }
+
+  if (swatchInfoList.length === 0) {
+    UI.message('No themeable colors. Paths must contain Light or Dark.');
+  } else {
+
+    // Find valid target themes (partial matching - at least 1 swatch must match)
+    var validThemes = [];
+    var themeMatchCounts = [];
+
+    for (var k = 0; k < themeKeywords.length; k++) {
+      var theme = themeKeywords[k];
+
+      if (arrayContains(currentThemesList, theme)) continue;
+
+      var matchCount = 0;
+      for (var s = 0; s < swatchInfoList.length; s++) {
+        var targetName = swatchInfoList[s].template.split('{{THEME}}').join(theme);
+        if (arrayContains(normalizedSet, targetName)) {
+          matchCount++;
+        }
+      }
+
+      // Allow partial matches (at least 1 swatch can be switched)
+      if (matchCount > 0) {
+        validThemes.push(theme);
+        themeMatchCounts.push(matchCount);
+      }
+    }
+
+    // Sort themes by match count (descending), then by name
+    var themesWithCounts = [];
+    for (var t = 0; t < validThemes.length; t++) {
+      themesWithCounts.push({ theme: validThemes[t], count: themeMatchCounts[t] });
+    }
+    themesWithCounts.sort(function(a, b) {
+      if (b.count !== a.count) return b.count - a.count;
+      var aLight = a.theme.toLowerCase().indexOf('light') >= 0;
+      var bLight = b.theme.toLowerCase().indexOf('light') >= 0;
+      if (aLight && !bLight) return -1;
+      if (!aLight && bLight) return 1;
+      return a.theme.localeCompare(b.theme);
+    });
+
+    // Rebuild arrays in sorted order
+    validThemes = [];
+    themeMatchCounts = [];
+    for (var t2 = 0; t2 < themesWithCounts.length; t2++) {
+      validThemes.push(themesWithCounts[t2].theme);
+      themeMatchCounts.push(themesWithCounts[t2].count);
+    }
+
+    var statusMsg = swatchInfoList.length + ' colors';
+    if (unmatchedSwatches.length > 0) {
+      statusMsg += ' (' + unmatchedSwatches.length + ' non-themeable)';
+    }
+
+    if (validThemes.length === 0) {
+      if (themeKeywords.length === currentThemesList.length) {
+        UI.message('Already using all available themes (' + currentThemesList.join(', ') + ')');
+      } else {
+        UI.message('No matching themes found for these colors');
+      }
+    } else {
+      var currentLabel = currentThemesList.join(', ');
+
+      // Build picker labels showing match counts
+      var pickerLabels = [];
+      for (var p = 0; p < validThemes.length; p++) {
+        var label = validThemes[p];
+        if (themeMatchCounts[p] < swatchInfoList.length) {
+          label += ' (' + themeMatchCounts[p] + '/' + swatchInfoList.length + ')';
+        }
+        pickerLabels.push(label);
+      }
+
+      // Function to perform the actual theme switch
+      function performSwitch(targetTheme) {
+        var switchCount = 0;
+
+        // Build lookup for this switch operation
+        var switchLookup = [];
+        for (var s = 0; s < swatchInfoList.length; s++) {
+          var targetNormName = swatchInfoList[s].template.split('{{THEME}}').join(targetTheme);
+          var targetRef = findRefByNormalizedName(targetNormName);
+          if (targetRef) {
+            switchLookup.push({
+              originalName: swatchInfoList[s].originalName,
+              targetRef: targetRef
+            });
+          }
+        }
+
+        function findTargetRef(currentOrigName) {
+          for (var i = 0; i < switchLookup.length; i++) {
+            if (switchLookup[i].originalName === currentOrigName) {
+              return switchLookup[i].targetRef;
+            }
+          }
+
+          var normName = normalizeName(currentOrigName);
+          var parts = normName.split('/');
+          if (parts.length < 2) return null;
+
+          var themePos = -1;
+          for (var p = 0; p < parts.length; p++) {
+            if (arrayContains(themeKeywords, parts[p])) {
+              themePos = p;
+              break;
+            }
+          }
+
+          if (themePos < 0) return null;
+
+          parts[themePos] = targetTheme;
+          var targetNormName = parts.join('/');
+
+          return findRefByNormalizedName(targetNormName);
+        }
+
+        function processLayer(layer) {
+          var native = layer.sketchObject;
+
+          // Only process fills/borders if not in "selected overrides only" mode
+          if (!hasSelectedOverrides) {
+            if (layer.style && layer.style.fills && native.style) {
+              var nativeFills = native.style().fills();
+              if (nativeFills) {
+                for (var f = 0; f < layer.style.fills.length; f++) {
+                  if (nativeFills[f] && nativeFills[f].color) {
+                    var nativeColor = nativeFills[f].color();
+                    if (nativeColor && nativeColor.swatchID) {
+                      var swatchID = String(nativeColor.swatchID());
+                      var currentName = getNameForSwatch(swatchID);
+                      if (currentName) {
+                        var targetRef = findTargetRef(currentName);
+                        if (targetRef) {
+                          var newSwatch = targetRef.import();
+                          layer.style.fills[f].color = newSwatch.referencingColor;
+                          switchCount++;
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+
+            if (layer.style && layer.style.borders && native.style) {
+              var nativeBorders = native.style().borders();
+              if (nativeBorders) {
+                for (var b = 0; b < layer.style.borders.length; b++) {
+                  if (nativeBorders[b] && nativeBorders[b].color) {
+                    var nativeColor = nativeBorders[b].color();
+                    if (nativeColor && nativeColor.swatchID) {
+                      var swatchID = String(nativeColor.swatchID());
+                      var currentName = getNameForSwatch(swatchID);
+                      if (currentName) {
+                        var targetRef = findTargetRef(currentName);
+                        if (targetRef) {
+                          var newSwatch = targetRef.import();
+                          layer.style.borders[b].color = newSwatch.referencingColor;
+                          switchCount++;
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          if (layer.type === 'SymbolInstance' && layer.overrides) {
+            for (var o = 0; o < layer.overrides.length; o++) {
+              var ov = layer.overrides[o];
+              if (ov.swatchValue && ov.swatchValue.name) {
+                // If we have selected overrides, only process those
+                if (hasSelectedOverrides && !arrayContains(selectedOverrideIds, ov.id)) {
+                  continue;
+                }
+                var swatchName = ov.swatchValue.name;
+                var targetRef = findTargetRef(swatchName);
+                if (targetRef) {
+                  try {
+                    var newSwatch = targetRef.import();
+                    layer.setOverrideValue(ov, newSwatch.referencingColor);
+                    switchCount++;
+                  } catch (e) {}
+                }
+              }
+            }
+          }
+
+          if (layer.layers) {
+            for (var c = 0; c < layer.layers.length; c++) {
+              processLayer(layer.layers[c]);
+            }
+          }
+        }
+
+        for (var i = 0; i < selection.length; i++) {
+          processLayer(selection[i]);
+        }
+
+        UI.message('Switched ' + switchCount + ' color(s) to ' + targetTheme);
+      }
+
+      // Helper to extract theme from picker label
+      function getThemeFromLabel(label) {
+        var parenPos = label.indexOf(' (');
+        if (parenPos > 0) return label.substring(0, parenPos);
+        return label;
+      }
+
+      // If only one theme available, switch automatically
+      if (validThemes.length === 1) {
+        performSwitch(validThemes[0]);
+      } else {
+        // Multiple themes: show picker with match counts
+        UI.getInputFromUser(matchedLib.name + ' - Switch Theme', {
+          type: UI.INPUT_TYPE.selection,
+          possibleValues: pickerLabels,
+          description: 'From: ' + currentLabel + ' | ' + statusMsg
+        }, function(err, selectedLabel) {
+          if (err) return;
+          var targetTheme = getThemeFromLabel(selectedLabel);
+          performSwitch(targetTheme);
+        });
+      }
+    }
+  }
+}
+
+}
+
+} catch (e) {
+  UI.message('Error: ' + e.message);
+}

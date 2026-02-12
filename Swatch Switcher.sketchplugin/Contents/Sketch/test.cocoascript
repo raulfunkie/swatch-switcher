@@ -1,0 +1,2 @@
+var sketch = require('sketch');
+sketch.UI.message('v3.6.0 - Test OK!');

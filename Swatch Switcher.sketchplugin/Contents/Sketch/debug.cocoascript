@@ -1,0 +1,165 @@
+var sketch = require('sketch');
+var UI = sketch.UI;
+
+try {
+
+var doc = sketch.getSelectedDocument();
+var Library = sketch.Library;
+var libs = Library.getLibraries();
+
+var selection = doc.selectedLayers.layers;
+if (!selection || selection.length === 0) {
+  UI.message('Please select at least one layer');
+} else {
+
+var foreign = doc.sketchObject.documentData().foreignSwatches();
+
+var swatchIDList = [];
+var swatchLibIDList = [];
+var swatchNameList = [];
+for (var i = 0; i < foreign.count(); i++) {
+  var fs = foreign[i];
+  var local = fs.localObject();
+  if (local && local.objectID && fs.libraryID) {
+    swatchIDList.push(String(local.objectID()));
+    swatchLibIDList.push(String(fs.libraryID()));
+    swatchNameList.push(local.name ? String(local.name()) : '');
+  }
+}
+
+function getLibIDForSwatch(swatchID) {
+  for (var i = 0; i < swatchIDList.length; i++) {
+    if (swatchIDList[i] === swatchID) return swatchLibIDList[i];
+  }
+  return null;
+}
+
+function getNameForSwatch(swatchID) {
+  for (var i = 0; i < swatchIDList.length; i++) {
+    if (swatchIDList[i] === swatchID) return swatchNameList[i];
+  }
+  return null;
+}
+
+var output = [];
+output.push('=== SWATCH SWITCHER DEBUG (Symbol Overrides) ===');
+output.push('');
+output.push('Foreign swatches in document: ' + foreign.count());
+output.push('');
+
+// Debug each selected layer
+for (var i = 0; i < selection.length; i++) {
+  var layer = selection[i];
+  output.push('--- LAYER ' + (i + 1) + ' ---');
+  output.push('Name: ' + layer.name);
+  output.push('Type: ' + layer.type);
+
+  // Check if Symbol Instance
+  if (layer.type === 'SymbolInstance') {
+    output.push('');
+    output.push('=== SYMBOL INSTANCE OVERRIDES ===');
+
+    if (layer.overrides) {
+      // Only show color-related overrides
+      var colorOverrides = [];
+      for (var o = 0; o < layer.overrides.length; o++) {
+        var ov = layer.overrides[o];
+        var prop = ov.property;
+        // Check if it's a color-related override
+        if (prop.indexOf('color') >= 0 || prop.indexOf('fill') >= 0 || prop === 'fillColor') {
+          colorOverrides.push({ index: o, override: ov });
+        }
+      }
+
+      output.push('Total overrides: ' + layer.overrides.length);
+      output.push('Color-related overrides: ' + colorOverrides.length);
+
+      // Check for selected overrides
+      var selectedOverrides = [];
+      for (var so = 0; so < layer.overrides.length; so++) {
+        if (layer.overrides[so].selected) {
+          selectedOverrides.push(layer.overrides[so].id);
+        }
+      }
+      output.push('Selected overrides: ' + (selectedOverrides.length > 0 ? selectedOverrides.join(', ') : 'NONE'));
+
+      // Check native API for selected override points
+      var native = layer.sketchObject;
+      if (native.selectedOverridePoint) {
+        var selPoint = native.selectedOverridePoint();
+        output.push('Native selectedOverridePoint: ' + (selPoint ? String(selPoint) : 'null'));
+      } else {
+        output.push('Native selectedOverridePoint: method not available');
+      }
+
+      output.push('');
+
+      for (var c = 0; c < colorOverrides.length; c++) {
+        var ov = colorOverrides[c].override;
+        var idx = colorOverrides[c].index;
+        output.push('Override ' + idx + ':');
+        output.push('  property: ' + ov.property);
+        output.push('  selected: ' + ov.selected);
+        output.push('  editable: ' + ov.editable);
+        output.push('  isDefault: ' + ov.isDefault);
+        output.push('  path: ' + ov.path);
+        output.push('  id: ' + ov.id);
+
+        // Value info
+        output.push('  value: ' + (ov.value ? String(ov.value).substring(0, 100) : 'null'));
+        output.push('  value type: ' + typeof ov.value);
+
+        // Swatch value info
+        output.push('  swatchValue: ' + (ov.swatchValue ? 'EXISTS' : 'null'));
+        if (ov.swatchValue) {
+          output.push('    id: ' + ov.swatchValue.id);
+          output.push('    name: ' + ov.swatchValue.name);
+          var libID = getLibIDForSwatch(ov.swatchValue.id);
+          output.push('    in foreign swatches: ' + (libID ? 'YES' : 'NO'));
+        }
+
+        // Try to get more info from the value if it's an object
+        if (ov.value && typeof ov.value === 'object') {
+          output.push('  value keys: ' + Object.keys(ov.value).join(', '));
+          if (ov.value.swatchID) {
+            output.push('  value.swatchID: ' + ov.value.swatchID);
+          }
+        }
+
+        // Check affectedLayer
+        if (ov.affectedLayer) {
+          output.push('  affectedLayer: ' + ov.affectedLayer.name + ' (' + ov.affectedLayer.type + ')');
+        }
+
+        output.push('');
+      }
+    } else {
+      output.push('No overrides array');
+    }
+  }
+
+  output.push('');
+}
+
+// Show sample foreign swatches
+output.push('--- SAMPLE FOREIGN SWATCHES (first 10) ---');
+for (var i = 0; i < Math.min(10, swatchNameList.length); i++) {
+  output.push('  ' + swatchNameList[i] + ' (ID: ' + swatchIDList[i].substring(0, 8) + '...)');
+}
+
+// Copy to clipboard
+var debugText = output.join('\n');
+console.log(debugText);
+
+var pasteboard = NSPasteboard.generalPasteboard();
+pasteboard.clearContents();
+pasteboard.setString_forType(debugText, NSPasteboardTypeString);
+
+UI.message('Debug info copied to clipboard!');
+
+}
+
+} catch (e) {
+  UI.message('Error: ' + e.message);
+  console.log('Error: ' + e.message);
+}

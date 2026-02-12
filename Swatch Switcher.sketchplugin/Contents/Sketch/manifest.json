@@ -1,0 +1,23 @@
+{
+  "name": "Swatch Switcher",
+  "description": "Switch color variable themes with auto-detection. Supports any folder structure.",
+  "author": "Raul",
+  "version": "1.0.0",
+  "identifier": "com.sketch.swatch-switcher",
+  "appcast": "",
+  "compatibleVersion": "70",
+  "bundleVersion": 1,
+  "commands": [
+    {
+      "name": "Switch Theme...",
+      "identifier": "switch",
+      "script": "switch.cocoascript"
+    }
+  ],
+  "menu": {
+    "title": "Swatch Switcher",
+    "items": [
+      "switch"
+    ]
+  }
+}
