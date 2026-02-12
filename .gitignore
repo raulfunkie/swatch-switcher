@@ -1,0 +1,18 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Sketch
+*.sketch.bak
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Debug/test files (keep locally, don't publish)
+**/debug.cocoascript
+**/test.cocoascript
