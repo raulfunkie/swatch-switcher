@@ -96,7 +96,3 @@ Fills/
 ## License
 
 [MIT](LICENSE) — free to use, modify, and distribute.
-
----
-
-Made by [Raul](https://github.com/raul)
