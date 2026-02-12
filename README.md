@@ -2,6 +2,8 @@
 
 Switch color variable themes instantly in Sketch. Auto-detects your library structure — no configuration needed.
 
+<video src="https://github.com/user-attachments/assets/2dbd1087-47b1-4b41-9076-09480f7cec46" controls></video>
+
 ## Installation
 
 1. [Download the latest release](../../releases/latest)
