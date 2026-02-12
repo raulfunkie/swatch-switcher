@@ -2,7 +2,7 @@
   "name": "Swatch Switcher",
   "description": "Switch color variable themes with auto-detection. Supports any folder structure.",
   "author": "Raul Rincon",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "identifier": "com.raulfunkie.swatch-switcher",
   "homepage": "https://github.com/raulfunkie/swatch-switcher",
   "compatibleVersion": "70",

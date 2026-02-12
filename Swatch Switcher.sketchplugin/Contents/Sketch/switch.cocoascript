@@ -143,6 +143,46 @@ function scanSelection(layer) {
         }
       }
     }
+
+    if (layer.style && layer.style.shadows && native.style) {
+      var nativeShadows = native.style().shadows();
+      if (nativeShadows) {
+        for (var s = 0; s < layer.style.shadows.length; s++) {
+          if (nativeShadows[s] && nativeShadows[s].color) {
+            var nativeColor = nativeShadows[s].color();
+            if (nativeColor && nativeColor.swatchID) {
+              var swatchID = String(nativeColor.swatchID());
+              var libID = getLibIDForSwatch(swatchID);
+              var swatchName = getNameForSwatch(swatchID);
+              if (libID && swatchName) {
+                if (!foundLibID) foundLibID = libID;
+                if (libID === foundLibID) arrayAddUnique(selectedSwatchNames, swatchName);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (layer.style && layer.style.innerShadows && native.style) {
+      var nativeInnerShadows = native.style().innerShadows();
+      if (nativeInnerShadows) {
+        for (var is = 0; is < layer.style.innerShadows.length; is++) {
+          if (nativeInnerShadows[is] && nativeInnerShadows[is].color) {
+            var nativeColor = nativeInnerShadows[is].color();
+            if (nativeColor && nativeColor.swatchID) {
+              var swatchID = String(nativeColor.swatchID());
+              var libID = getLibIDForSwatch(swatchID);
+              var swatchName = getNameForSwatch(swatchID);
+              if (libID && swatchName) {
+                if (!foundLibID) foundLibID = libID;
+                if (libID === foundLibID) arrayAddUnique(selectedSwatchNames, swatchName);
+              }
+            }
+          }
+        }
+      }
+    }
   }
 
   if (layer.type === 'SymbolInstance' && layer.overrides) {
@@ -454,6 +494,52 @@ if (selectedSwatchNames.length === 0) {
                         if (targetRef) {
                           var newSwatch = targetRef.import();
                           layer.style.borders[b].color = newSwatch.referencingColor;
+                          switchCount++;
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+
+            if (layer.style && layer.style.shadows && native.style) {
+              var nativeShadows = native.style().shadows();
+              if (nativeShadows) {
+                for (var s = 0; s < layer.style.shadows.length; s++) {
+                  if (nativeShadows[s] && nativeShadows[s].color) {
+                    var nativeColor = nativeShadows[s].color();
+                    if (nativeColor && nativeColor.swatchID) {
+                      var swatchID = String(nativeColor.swatchID());
+                      var currentName = getNameForSwatch(swatchID);
+                      if (currentName) {
+                        var targetRef = findTargetRef(currentName);
+                        if (targetRef) {
+                          var newSwatch = targetRef.import();
+                          layer.style.shadows[s].color = newSwatch.referencingColor;
+                          switchCount++;
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+
+            if (layer.style && layer.style.innerShadows && native.style) {
+              var nativeInnerShadows = native.style().innerShadows();
+              if (nativeInnerShadows) {
+                for (var is = 0; is < layer.style.innerShadows.length; is++) {
+                  if (nativeInnerShadows[is] && nativeInnerShadows[is].color) {
+                    var nativeColor = nativeInnerShadows[is].color();
+                    if (nativeColor && nativeColor.swatchID) {
+                      var swatchID = String(nativeColor.swatchID());
+                      var currentName = getNameForSwatch(swatchID);
+                      if (currentName) {
+                        var targetRef = findTargetRef(currentName);
+                        if (targetRef) {
+                          var newSwatch = targetRef.import();
+                          layer.style.innerShadows[is].color = newSwatch.referencingColor;
                           switchCount++;
                         }
                       }
